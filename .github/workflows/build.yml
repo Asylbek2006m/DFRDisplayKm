@@ -1,0 +1,41 @@
+name: Build DFRDisplayKm
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        configuration: [Release]
+        platform: [x64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install Windows Driver Kit
+        shell: pwsh
+        run: |
+          # UNVERIFIED: the WDK download link below must be checked against Microsoft's current WDK page.
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2128854" -OutFile wdksetup.exe
+          Start-Process -FilePath .\wdksetup.exe -ArgumentList "/quiet /norestart" -Wait
+
+      - name: Build solution
+        shell: pwsh
+        run: msbuild DFRDisplayKm.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /m /verbosity:minimal
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Get-ChildItem -Recurse -Include *.sys,*.inf,*.cat,*.pdb src | Copy-Item -Destination artifacts -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DFRDisplayKm-${{ matrix.configuration }}-${{ matrix.platform }}
+          path: artifacts/*
