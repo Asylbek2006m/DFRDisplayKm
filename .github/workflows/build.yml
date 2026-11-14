@@ -45,7 +45,9 @@ jobs:
           $wdf      = Get-ChildItem "$wdk" -Recurse -Filter "WdfCoInstaller*.dll" -ErrorAction SilentlyContinue | Where-Object FullName -match '\\x64\\' | Select-Object -First 1
           if (-not $wdf) { Get-ChildItem "$wdk" -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | Select-Object -First 30 FullName | Format-Table -AutoSize | Out-String | Write-Host }
           $sys      = Get-ChildItem build -Recurse -Filter DFRDisplayKm.sys | Select-Object -First 1
-          $inf      = Get-ChildItem build -Recurse -Filter DFRDisplayKm.inf | Select-Object -First 1
+          # WDK writes the stamped INF to intermediate\..., not build\...
+          $inf      = Get-ChildItem . -Recurse -Filter DFRDisplayKm.inf -ErrorAction SilentlyContinue | Where-Object FullName -match 'intermediate' | Select-Object -First 1
+          Write-Host "inf2cat=$($inf2cat.FullName) signtool=$($signtool.FullName) wdf=$($wdf.FullName) sys=$($sys.FullName) inf=$($inf.FullName)"
           if (-not ($inf2cat -and $signtool -and $wdf -and $sys -and $inf)) { throw "Missing WDK tools or build outputs" }
           if (Select-String -Path $inf.FullName -Pattern '\$(ARCH|KMDFVERSION|KMDFCOINSTALLERVERSION)\$') { throw "INF was not stamped by the WDK" }
 
