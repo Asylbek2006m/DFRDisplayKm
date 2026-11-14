@@ -27,7 +27,7 @@ jobs:
 
       - name: Build solution
         shell: pwsh
-        run: msbuild DFRDisplayKm.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /m /verbosity:minimal
+        run: msbuild DFRDisplayKm.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:SignMode=Off /m /verbosity:minimal
 
       - name: Collect artifacts
         shell: pwsh
