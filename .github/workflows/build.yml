@@ -33,7 +33,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Get-ChildItem -Recurse -Include *.sys,*.inf,*.cat,*.pdb src | Copy-Item -Destination artifacts -Force
+          Get-ChildItem -Recurse -Include *.sys,*.inf,*.cat,*.pdb build | Copy-Item -Destination artifacts -Force
 
       - uses: actions/upload-artifact@v4
         with:
