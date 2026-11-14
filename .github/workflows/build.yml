@@ -1,17 +1,18 @@
-name: Build DFRDisplayKm
+name: Build and release DFRDisplayKm
 
 on:
   push:
+    branches: [master]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: windows-2022
-    strategy:
-      matrix:
-        configuration: [Release]
-        platform: [x64]
     steps:
       - uses: actions/checkout@v4
 
@@ -21,21 +22,52 @@ jobs:
       - name: Install Windows Driver Kit
         shell: pwsh
         run: |
-          # UNVERIFIED: the WDK download link below must be checked against Microsoft's current WDK page.
+          # The WDK link should be re-checked against Microsoft's current WDK page.
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2128854" -OutFile wdksetup.exe
           Start-Process -FilePath .\wdksetup.exe -ArgumentList "/quiet /norestart" -Wait
 
       - name: Build solution
         shell: pwsh
-        run: msbuild DFRDisplayKm.sln /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:SignMode=Off /m /verbosity:minimal
+        run: msbuild DFRDisplayKm.sln /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /m /verbosity:minimal
 
-      - name: Collect artifacts
+      - name: Package driver with test-signed catalog
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Get-ChildItem -Recurse -Include *.sys,*.inf,*.cat,*.pdb build | Copy-Item -Destination artifacts -Force
+          $wdk = "C:\Program Files (x86)\Windows Kits\10"
+          $inf2cat  = Get-ChildItem "$wdk\bin" -Recurse -Filter Inf2Cat.exe  | Where-Object FullName -match '\\x86\\' | Select-Object -First 1
+          $signtool = Get-ChildItem "$wdk\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match '\\x64\\' | Select-Object -First 1
+          $wdf      = Get-ChildItem "$wdk\Redist\wdf\x64" -Filter "WdfCoInstaller*.dll" | Select-Object -First 1
+          $sys      = Get-ChildItem build -Recurse -Filter DFRDisplayKm.sys | Select-Object -First 1
+          $inf      = Get-ChildItem build -Recurse -Filter DFRDisplayKm.inf | Select-Object -First 1
+          if (-not ($inf2cat -and $signtool -and $wdf -and $sys -and $inf)) { throw "Missing WDK tools or build outputs" }
+          if (Select-String -Path $inf.FullName -Pattern '\$(ARCH|KMDFVERSION|KMDFCOINSTALLERVERSION)\$') { throw "INF was not stamped by the WDK" }
 
-      - uses: actions/upload-artifact@v4
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item $sys.FullName, $inf.FullName, $wdf.FullName -Destination package
+
+          & $inf2cat.FullName /driver:"$PWD\package" /os:10_X64 /verbose
+          if ($LASTEXITCODE -ne 0) { throw "Inf2Cat failed" }
+
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=DFRDisplayKm Test" -KeyUsage DigitalSignature -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(5)
+          Export-Certificate -Cert $cert -FilePath DFRDisplayKm-TestCert.cer | Out-Null
+          & $signtool.FullName sign /v /fd SHA256 /sha1 $cert.Thumbprint "package\DFRDisplayKm.sys" "package\DFRDisplayKm.cat"
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+
+          $dist = "DFRDisplayKm-Install"
+          New-Item -ItemType Directory -Force "$dist\package" | Out-Null
+          Copy-Item package\* "$dist\package"
+          Copy-Item DFRDisplayKm-TestCert.cer, installer\Install.cmd -Destination $dist
+          Compress-Archive -Path $dist -DestinationPath DFRDisplayKm-Install.zip -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: DFRDisplayKm-${{ matrix.configuration }}-${{ matrix.platform }}
-          path: artifacts/*
+          name: DFRDisplayKm-Install
+          path: DFRDisplayKm-Install.zip
+
+      - name: Publish GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DFRDisplayKm-Install.zip
+          generate_release_notes: true
