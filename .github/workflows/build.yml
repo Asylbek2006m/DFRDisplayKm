@@ -24,7 +24,13 @@ jobs:
         run: |
           # The WDK link should be re-checked against Microsoft's current WDK page.
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2128854" -OutFile wdksetup.exe
-          Start-Process -FilePath .\wdksetup.exe -ArgumentList "/quiet /norestart" -Wait
+          $p = Start-Process -FilePath .\wdksetup.exe -ArgumentList "/quiet /norestart" -Wait -PassThru
+          Write-Host "wdksetup exit code: $($p.ExitCode)"
+          # Wait until any Windows Kit installer work has finished
+          while (Get-Process -Name msiexec, wdksetup -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 15 }
+          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "Inf2Cat.exe" -ErrorAction SilentlyContinue | ForEach-Object FullName
+          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter "signtool.exe" -ErrorAction SilentlyContinue | ForEach-Object FullName
+          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10" -Directory | ForEach-Object Name
 
       - name: Build solution
         shell: pwsh
