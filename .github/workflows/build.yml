@@ -48,11 +48,19 @@ jobs:
           # WDK writes the stamped INF to intermediate\..., not build\...
           $inf      = Get-ChildItem . -Recurse -Filter DFRDisplayKm.inf -ErrorAction SilentlyContinue | Where-Object FullName -match 'intermediate' | Select-Object -First 1
           Write-Host "inf2cat=$($inf2cat.FullName) signtool=$($signtool.FullName) wdf=$($wdf.FullName) sys=$($sys.FullName) inf=$($inf.FullName)"
-          if (-not ($inf2cat -and $signtool -and $wdf -and $sys -and $inf)) { throw "Missing WDK tools or build outputs" }
+          if (-not ($inf2cat -and $signtool -and $sys -and $inf)) { throw "Missing WDK tools or build outputs" }
           if (Select-String -Path $inf.FullName -Pattern '\$(ARCH|KMDFVERSION|KMDFCOINSTALLERVERSION)\$') { throw "INF was not stamped by the WDK" }
 
           New-Item -ItemType Directory -Force package | Out-Null
-          Copy-Item $sys.FullName, $inf.FullName, $wdf.FullName -Destination package
+          Copy-Item $sys.FullName, $inf.FullName -Destination package
+          if ($wdf) {
+            Copy-Item $wdf.FullName -Destination package
+          } else {
+            # KMDF is in-box on Windows 10/11; the coinstaller is only for older systems.
+            Write-Warning "WdfCoInstaller not found in WDK; removing coinstaller lines from packaged INF"
+            $lines = Get-Content package\DFRDisplayKm.inf | Where-Object { $_ -notmatch 'CoInstaller' }
+            Set-Content -Path package\DFRDisplayKm.inf -Value $lines
+          }
 
           & $inf2cat.FullName /driver:"$PWD\package" /os:10_X64 /verbose
           if ($LASTEXITCODE -ne 0) { throw "Inf2Cat failed" }
