@@ -80,6 +80,7 @@ jobs:
           if ($exe) {
             New-Item -ItemType Directory -Force "$dist\test" | Out-Null
             Copy-Item $exe.FullName "$dist\test"
+            Copy-Item installer\TEST-TOUCHBAR.txt "$dist\test"
           } else {
             Write-Warning "Console test utility was not built"
           }
