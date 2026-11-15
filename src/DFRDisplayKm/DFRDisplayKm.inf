@@ -25,8 +25,6 @@ WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1
 %ManufacturerName%=Standard,NT$ARCH$
 
 [Standard.NT$ARCH$]
-%DFRDisplayKm.CompDeviceName% = DFRDisplayComposite_Install, USB\VID_05AC&PID_8302
-%DFRDisplayKm.CompDeviceName% = DFRDisplayComposite_Install, USB\VID_05AC&PID_8600
 %DFRDisplayKm.DeviceDesc% = DFRDisplayKm_Device, USB\VID_05AC&PID_8302&MI_01
 %DFRDisplayKm.DeviceDesc% = DFRDisplayKm_Device, USB\VID_05AC&PID_8600&MI_01
 
@@ -63,23 +61,6 @@ KmdfService =  DFRDisplayKm, DFRDisplayKm_wdfsect
 [DFRDisplayKm_wdfsect]
 KmdfLibraryVersion = $KMDFVERSION$
 
-; Composition Device Driver
-[DFRDisplayComposite_Install]
-Include=usb.inf
-Needs=Composite.Dev.NT
-
-[DFRDisplayComposite_Install.Services]
-Include=usb.inf
-Needs=Composite.Dev.NT.Services
-
-[DFRDisplayComposite_Install.HW]
-AddReg=CompositeDev_AddReg
-
-[CompositeDev_AddReg]
-HKR,,FriendlyName,,%DFRDisplayKm.CompDeviceName%
-; Switch to the macOS iBridge display configuration
-HKR,,OriginalConfigurationValue,%REG_DWORD%,1
-
 [Strings]
 ManufacturerName="Bingxing Wang"
 ClassName="Universal Serial Bus devices"
@@ -87,7 +68,6 @@ DiskName = "iBridge Display Installation Disk"
 
 DFRDisplayKm.DeviceDesc = "iBridge Display Device"
 DFRDisplayKm.SVCDESC = "iBridge Display Service"
-DFRDisplayKm.CompDeviceName="iBridge Display Composition Device"
 
 REG_MULTI_SZ = 0x00010000
 REG_DWORD = 0x00010001

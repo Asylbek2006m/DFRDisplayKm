@@ -53,6 +53,7 @@ jobs:
 
           New-Item -ItemType Directory -Force package | Out-Null
           Copy-Item $sys.FullName, $inf.FullName -Destination package
+          Copy-Item "src\DFRDisplayKm\DFRUsbCcgp.inf" -Destination package
           if ($wdf) {
             Copy-Item $wdf.FullName -Destination package
           } else {
@@ -67,7 +68,8 @@ jobs:
 
           $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=DFRDisplayKm Test" -KeyUsage DigitalSignature -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(5)
           Export-Certificate -Cert $cert -FilePath DFRDisplayKm-TestCert.cer | Out-Null
-          & $signtool.FullName sign /v /fd SHA256 /sha1 $cert.Thumbprint "package\DFRDisplayKm.sys" "package\DFRDisplayKm.cat"
+          $files = @("package\DFRDisplayKm.sys") + (Get-ChildItem package -Filter *.cat | ForEach-Object FullName)
+          & $signtool.FullName sign /v /fd SHA256 /sha1 $cert.Thumbprint $files
           if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
 
           $dist = "DFRDisplayKm-Install"

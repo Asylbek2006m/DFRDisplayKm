@@ -15,7 +15,8 @@ certutil -addstore -f TrustedPublisher DFRDisplayKm-TestCert.cer || goto :fail
 echo [2/4] Enabling test signing mode (needs restart)...
 bcdedit /set testsigning on || goto :fail
 
-echo [3/4] Installing driver package...
+echo [3/4] Installing driver package (USB composite, then display)...
+pnputil /add-driver "package\DFRUsbCcgp.inf" /install || goto :fail
 pnputil /add-driver "package\DFRDisplayKm.inf" /install || goto :fail
 
 echo [4/4] Done.
