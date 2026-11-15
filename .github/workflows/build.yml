@@ -79,7 +79,7 @@ jobs:
           $exe = Get-ChildItem build -Recurse -Filter DFRDisplayUm.Utility.Console.exe -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($exe) {
             New-Item -ItemType Directory -Force "$dist\test" | Out-Null
-            Copy-Item $exe.FullName "$dist\test"
+            Copy-Item "$($exe.DirectoryName)\*" "$dist\test" -Recurse
             Copy-Item installer\TEST-TOUCHBAR.txt "$dist\test"
           } else {
             Write-Warning "Console test utility was not built"
