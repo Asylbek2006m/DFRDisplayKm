@@ -1,5 +1,15 @@
 # Touch Bar (DFR) Display Driver for Windows
 
+> **Fork notice.** This is a fork of [imbushuo/DFRDisplayKm](https://github.com/imbushuo/DFRDisplayKm)
+> maintained by Aibek Malikov (Айбек Маликов). The original driver is by Bingxing Wang and is licensed under MIT;
+> the original copyright is preserved in [LICENSE](./LICENSE).
+>
+> Changes in this fork: the USB composite switch is split into `DFRUsbCcgp.inf`, a GitHub Actions workflow builds
+> and test-signs the driver, and each release ships `DFRDisplayKm-Install.zip` with a one-click `Install.cmd`
+> and a console test utility (`test\`). These changes are **untested on real hardware** unless stated otherwise.
+> Test-signed builds require Windows test signing mode and Secure Boot turned off.
+
+
 This driver implements custom display functionality for Apple Touch Bar (DFR)
 on Windows 10. Touch Bar is a USB composite device with two configurations.
 The first configuration implements basic function and media key input. 
@@ -44,5 +54,6 @@ Check the badly-written user-mode application example `DFRDisplayUm.Utility.Cons
 ## License
 
 Copyright (c) Bingxing Wang. All rights reserved.
+Copyright (c) 2026 Aibek Malikov (Айбек Маликов). All rights reserved for the modifications in this fork.
 
 Licensed under the [MIT License](./LICENSE).

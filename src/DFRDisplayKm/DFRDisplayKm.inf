@@ -62,7 +62,7 @@ KmdfService =  DFRDisplayKm, DFRDisplayKm_wdfsect
 KmdfLibraryVersion = $KMDFVERSION$
 
 [Strings]
-ManufacturerName="Bingxing Wang"
+ManufacturerName="Aibek Malikov"
 ClassName="Universal Serial Bus devices"
 DiskName = "iBridge Display Installation Disk"
 

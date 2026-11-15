@@ -36,7 +36,7 @@ HKR,,FriendlyName,,%DFRUsbCcgp.CompDeviceName%
 HKR,,OriginalConfigurationValue,%REG_DWORD%,1
 
 [Strings]
-ManufacturerName="Bingxing Wang"
+ManufacturerName="Aibek Malikov"
 DFRUsbCcgp.CompDeviceName="iBridge Display Composition Device"
 
 REG_DWORD = 0x00010001
