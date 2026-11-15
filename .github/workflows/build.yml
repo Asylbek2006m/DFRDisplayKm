@@ -36,6 +36,17 @@ jobs:
         shell: pwsh
         run: msbuild DFRDisplayKm.sln /p:Configuration=Release /p:Platform=x64 /p:SignMode=Off /m /verbosity:minimal
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build Touch Bar Studio
+        # A failure here must not block the driver release; the zip simply lacks the app.
+        continue-on-error: true
+        shell: pwsh
+        run: dotnet publish src/TouchBarStudio/TouchBarStudio.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out/TouchBarStudio
+
       - name: Package driver with test-signed catalog
         shell: pwsh
         run: |
@@ -83,6 +94,12 @@ jobs:
             Copy-Item installer\TEST-TOUCHBAR.txt "$dist\test"
           } else {
             Write-Warning "Console test utility was not built"
+          }
+          if (Test-Path out\TouchBarStudio\TouchBarStudio.exe) {
+            New-Item -ItemType Directory -Force "$dist\TouchBarStudio" | Out-Null
+            Copy-Item out\TouchBarStudio\TouchBarStudio.exe, installer\TouchBarStudio-README.txt "$dist\TouchBarStudio"
+          } else {
+            Write-Warning "Touch Bar Studio was not built"
           }
           Compress-Archive -Path $dist -DestinationPath DFRDisplayKm-Install.zip -Force
 
