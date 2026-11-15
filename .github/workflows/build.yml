@@ -82,9 +82,11 @@ jobs:
           name: DFRDisplayKm-Install
           path: DFRDisplayKm-Install.zip
 
-      - name: Publish GitHub Release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish GitHub Release
+        # Release on tag pushes, or on master commits whose message contains [release]
+        if: startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release]')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v0.1.{0}', github.run_number) }}
           files: DFRDisplayKm-Install.zip
           generate_release_notes: true
