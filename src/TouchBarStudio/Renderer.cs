@@ -30,10 +30,10 @@ namespace TouchBarStudio
         const int TileHeight = 48;
         const int IconSize = 32;
 
-        readonly Bitmap _frame = new Bitmap(W, H, PixelFormat.Format32bppArgb);
+        readonly Bitmap _frame = new Bitmap(W, H, PixelFormat.Format32bppRgb);
         readonly Graphics _graphics;
-        readonly Font _font = new Font("Segoe UI", 20, FontStyle.Regular, GraphicsUnit.Pixel);
-        readonly Font _small = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel);
+        readonly Font _font = new Font("Segoe UI Semibold", 22, FontStyle.Regular, GraphicsUnit.Pixel);
+        readonly Font _small = new Font("Segoe UI Semibold", 18, FontStyle.Regular, GraphicsUnit.Pixel);
         readonly Font _glyphFont = new Font("Segoe MDL2 Assets", 22, FontStyle.Regular, GraphicsUnit.Pixel);
         readonly StringFormat _left = new StringFormat
         {
@@ -63,7 +63,8 @@ namespace TouchBarStudio
             _graphics = Graphics.FromImage(_frame);
             _graphics.SmoothingMode = SmoothingMode.AntiAlias;
             _graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            _graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            _graphics.PixelOffsetMode = PixelOffsetMode.HalfPixel;
+            _graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
         }
 
         /// <summary>The last rendered frame. Owned by the renderer; do not dispose.</summary>
