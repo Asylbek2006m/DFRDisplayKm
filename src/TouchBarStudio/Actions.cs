@@ -66,8 +66,12 @@ namespace TouchBarStudio
                 case ItemType.LockScreen:
                     LockWorkStation();
                     break;
+                case ItemType.MicMute:
+                    SystemControls.ToggleMic();
+                    break;
                 default:
-                    // Text, Clock and Page items do nothing here (Page is handled by the main window).
+                    // Text, Clock and Page items do nothing here (Page is handled by the main window);
+                    // sliders and the timeline react to dragging, not to a tap.
                     break;
             }
         }

@@ -33,6 +33,22 @@ namespace TouchBarStudio
         readonly Bitmap _frame = new Bitmap(W, H, PixelFormat.Format32bppArgb);
         readonly Graphics _graphics;
         readonly Font _font = new Font("Segoe UI", 20, FontStyle.Regular, GraphicsUnit.Pixel);
+        readonly Font _small = new Font("Segoe UI", 16, FontStyle.Regular, GraphicsUnit.Pixel);
+        readonly Font _glyphFont = new Font("Segoe MDL2 Assets", 22, FontStyle.Regular, GraphicsUnit.Pixel);
+        readonly StringFormat _left = new StringFormat
+        {
+            Alignment = StringAlignment.Near,
+            LineAlignment = StringAlignment.Center,
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
+        readonly StringFormat _rightAligned = new StringFormat
+        {
+            Alignment = StringAlignment.Far,
+            LineAlignment = StringAlignment.Center,
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
         readonly StringFormat _format = new StringFormat
         {
             Alignment = StringAlignment.Center,
@@ -107,13 +123,37 @@ namespace TouchBarStudio
             var rect = tile.Rect;
 
             var background = pressed ? Lighten(item.Background, 0.35f) : item.Background;
+            if (item.Type == ItemType.MicMute && SystemState.MicMuted == 1)
+            {
+                background = Color.FromArgb(0xB0, 0x2A, 0x2A);
+            }
+
             using (var path = RoundedRect(rect, 10))
             using (var brush = new SolidBrush(Color.FromArgb(255, background)))
             {
                 g.FillPath(brush, path);
             }
 
+            switch (item.Type)
+            {
+                case ItemType.Brightness:
+                    DrawSlider(g, tile, "\uE706", SystemState.BrightnessSupported ? SystemState.BrightnessPct : -1,
+                        Loc.T("Not supported"), string.IsNullOrEmpty(item.Label) ? Loc.T("Brightness") : item.Label);
+                    return;
+                case ItemType.Volume:
+                    DrawSlider(g, tile, SystemState.Muted ? "\uE74F" : "\uE767", SystemState.VolumePct,
+                        Loc.T("Not supported"), string.IsNullOrEmpty(item.Label) ? Loc.T("Volume") : item.Label);
+                    return;
+                case ItemType.Scrubber:
+                    DrawScrubber(g, tile);
+                    return;
+            }
+
             string text = item.Type == ItemType.Clock ? ClockText(item) : item.Label;
+            if (item.Type == ItemType.MicMute)
+            {
+                text = SystemState.MicMuted == 1 ? Loc.T("Mic off") : (string.IsNullOrEmpty(text) ? Loc.T("Mic") : text);
+            }
             var textRect = new Rectangle(rect.X + 4, rect.Y, rect.Width - 8, rect.Height);
 
             var icon = GetIcon(item);
@@ -136,6 +176,103 @@ namespace TouchBarStudio
                 using (var brush = new SolidBrush(item.ForeColor))
                 {
                     g.DrawString(text, _font, brush, textRect, _format);
+                }
+            }
+        }
+
+        void DrawSlider(Graphics g, Tile tile, string glyph, int pct, string unavailable, string label)
+        {
+            var item = tile.Item;
+            var rect = tile.Rect;
+            using (var path = RoundedRect(rect, 10))
+            {
+                if (pct >= 0)
+                {
+                    int fill = (int)Math.Round(rect.Width * pct / 100.0);
+                    g.SetClip(path, CombineMode.Replace);
+                    using (var accent = new SolidBrush(item.AccentColor))
+                    {
+                        g.FillRectangle(accent, rect.X, rect.Y, fill, rect.Height);
+                    }
+
+                    g.ResetClip();
+                    int knobX = Math.Max(rect.X + 4, Math.Min(rect.Right - 8, rect.X + fill - 3));
+                    using (var knob = new SolidBrush(Color.FromArgb(230, 255, 255, 255)))
+                    using (var knobPath = RoundedRect(new Rectangle(knobX, rect.Y + 10, 5, rect.Height - 20), 2))
+                    {
+                        g.FillPath(knob, knobPath);
+                    }
+                }
+            }
+
+            using (var fore = new SolidBrush(item.ForeColor))
+            {
+                g.DrawString(glyph, _glyphFont, fore, new Rectangle(rect.X + 12, rect.Y, 34, rect.Height), _left);
+                g.DrawString(pct >= 0 ? label : unavailable, _font, fore,
+                    new Rectangle(rect.X + 52, rect.Y, rect.Width - 52 - 70, rect.Height), _left);
+                if (pct >= 0)
+                {
+                    g.DrawString(pct + "%", _font, fore, new Rectangle(rect.Right - 80, rect.Y, 68, rect.Height), _rightAligned);
+                }
+            }
+        }
+
+        static string Clock(double seconds)
+        {
+            var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+            return t.TotalHours >= 1 ? string.Format("{0}:{1:00}:{2:00}", (int)t.TotalHours, t.Minutes, t.Seconds)
+                                     : string.Format("{0}:{1:00}", t.Minutes, t.Seconds);
+        }
+
+        void DrawScrubber(Graphics g, Tile tile)
+        {
+            var item = tile.Item;
+            var rect = tile.Rect;
+            var media = SystemState.Media;
+            bool has = media != null && media.HasSession;
+            double duration = has ? media.Duration : 0;
+            double position = has ? media.Position : 0;
+            if (SystemState.ScrubFraction >= 0 && duration > 0)
+            {
+                position = SystemState.ScrubFraction * duration;
+            }
+
+            if (duration > 0)
+            {
+                int fill = (int)Math.Round(rect.Width * Math.Min(1.0, position / duration));
+                using (var path = RoundedRect(rect, 10))
+                {
+                    g.SetClip(path, CombineMode.Replace);
+                    using (var accent = new SolidBrush(item.AccentColor))
+                    {
+                        g.FillRectangle(accent, rect.X, rect.Y, fill, rect.Height);
+                    }
+
+                    g.ResetClip();
+                    int knobX = Math.Max(rect.X + 4, Math.Min(rect.Right - 8, rect.X + fill - 3));
+                    using (var knob = new SolidBrush(Color.FromArgb(230, 255, 255, 255)))
+                    using (var knobPath = RoundedRect(new Rectangle(knobX, rect.Y + 10, 5, rect.Height - 20), 2))
+                    {
+                        g.FillPath(knob, knobPath);
+                    }
+                }
+            }
+
+            string title = Loc.T("Nothing is playing");
+            if (has && !string.IsNullOrEmpty(media.Title))
+            {
+                title = string.IsNullOrEmpty(media.Artist) ? media.Title : media.Title + " \u2014 " + media.Artist;
+            }
+
+            string times = duration > 0 ? Clock(position) + " / " + Clock(duration) : "";
+            int timeWidth = string.IsNullOrEmpty(times) ? 0 : 190;
+            using (var fore = new SolidBrush(item.ForeColor))
+            {
+                g.DrawString(has && media.Playing ? "\uE769" : "\uE768", _glyphFont, fore, new Rectangle(rect.X + 12, rect.Y, 34, rect.Height), _left);
+                g.DrawString(title, _font, fore, new Rectangle(rect.X + 52, rect.Y, rect.Width - 52 - timeWidth - 12, rect.Height), _left);
+                if (timeWidth > 0)
+                {
+                    g.DrawString(times, _small, fore, new Rectangle(rect.Right - timeWidth - 8, rect.Y, timeWidth, rect.Height), _rightAligned);
                 }
             }
         }
@@ -256,6 +393,10 @@ namespace TouchBarStudio
             _graphics.Dispose();
             _frame.Dispose();
             _font.Dispose();
+            _small.Dispose();
+            _glyphFont.Dispose();
+            _left.Dispose();
+            _rightAligned.Dispose();
             _format.Dispose();
         }
     }

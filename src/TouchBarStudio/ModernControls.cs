@@ -143,12 +143,17 @@ namespace TouchBarStudio
         }
 
         /// <summary>Bar X pixel under a control point, or -1 when outside the bar.</summary>
-        public int ToBarX(Point point)
+        public int ToBarX(Point point) => ToBarX(point, false);
+
+        /// <summary>Converts a control point to a bar x position. With clamp the point may be outside the frame (used while dragging).</summary>
+        public int ToBarX(Point point, bool clamp)
         {
             var r = FrameRect();
-            if (r.Width <= 0 || point.X < r.Left || point.X >= r.Right) return -1;
+            if (r.Width <= 0) return -1;
+            if (!clamp && (point.X < r.Left || point.X >= r.Right)) return -1;
 
             int x = (int)((point.X - r.Left) / r.Width * Renderer.W);
+            if (clamp) return Math.Max(0, Math.Min(Renderer.W - 1, x));
             return x < 0 || x >= Renderer.W ? -1 : x;
         }
 

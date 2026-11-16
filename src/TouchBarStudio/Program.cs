@@ -31,6 +31,7 @@ namespace TouchBarStudio
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
+                Loc.Set("auto");
                 bool hidden = Array.IndexOf(args, "--hidden") >= 0;
                 Application.Run(new MainForm(hidden));
 

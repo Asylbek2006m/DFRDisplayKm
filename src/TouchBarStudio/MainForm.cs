@@ -25,6 +25,9 @@ namespace TouchBarStudio
         BarPage _page;
         List<Tile> _tiles = new List<Tile>();
         int _pressed = -1;
+        int _drag = -1;
+        string _lastForeground = "";
+        BarPage _homePage;
         string _lastClock = "";
         string _lastAction = "";
         string _touchState = "not started";
@@ -56,6 +59,7 @@ namespace TouchBarStudio
 
         public MainForm(bool startHidden)
         {
+            Loc.Set(_cfg.Language);
             Theme.Init();
             Theme.Apply(_cfg.Theme);
 
@@ -89,6 +93,8 @@ namespace TouchBarStudio
             {
                 throw new InvalidOperationException("Window handle was not created");
             }
+
+            StartSystemServices();
 
             _timer.Interval = 1000;
             _timer.Tick += OnTick;
@@ -138,6 +144,7 @@ namespace TouchBarStudio
             Theme.Changed -= OnThemeChanged;
             SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
             _timer.Stop();
+            SystemState.Media?.Dispose();
             _touch?.Dispose();
             _device.Clear();
             _device.Close();
@@ -215,7 +222,8 @@ namespace TouchBarStudio
 
         static ModernButton MakeButton(string text, int width, EventHandler onClick, bool accent = false)
         {
-            var button = new ModernButton { Text = text, Width = Theme.S(width), Accent = accent };
+            var button = new ModernButton { Text = Loc.T(text), Tag = text, Accent = accent };
+            button.Width = Math.Max(Theme.S(width), TextRenderer.MeasureText(button.Text, Theme.UiFont).Width + Theme.S(28));
             button.Margin = new Padding(0, 0, Theme.S(8), Theme.S(8));
             button.Click += onClick;
             return button;
@@ -229,7 +237,7 @@ namespace TouchBarStudio
             var titles = Track(new Panel { Dock = DockStyle.Fill });
             _subtitle.Dock = DockStyle.Fill;
             _subtitle.Font = _subFont;
-            _subtitle.Text = "Tap a button in the preview to try it. Drop a program onto the window to add it.";
+            _subtitle.Text = Loc.T("Tap a button in the preview to try it. Drop a program onto the window to add it.");
             _subtitle.TextAlign = ContentAlignment.TopLeft;
             _title.Dock = DockStyle.Top;
             _title.Height = Theme.S(34);
@@ -274,6 +282,7 @@ namespace TouchBarStudio
             _preview.Dock = DockStyle.Fill;
             _preview.MouseDown += OnPreviewDown;
             _preview.MouseUp += OnPreviewUp;
+            _preview.MouseMove += OnPreviewMove;
             _previewCard.Controls.Add(_preview);
             previewHost.Controls.Add(_previewCard);
 
@@ -391,20 +400,27 @@ namespace TouchBarStudio
             {
                 HookDrop(c);
             }
+
+            HookListReorder();
         }
 
         void BuildTray()
         {
-            _trayMenu.Items.Add("Open editor", null, (s, e) => ShowEditor());
-            _trayMenu.Items.Add("Restart as administrator", null, (s, e) => RestartAsAdmin());
+            _trayMenu.Items.Clear();
+            _trayMenu.Items.Add(Loc.T("Open editor"), null, (s, e) => ShowEditor());
+            _trayMenu.Items.Add(Loc.T("Restart as administrator"), null, (s, e) => RestartAsAdmin());
             _trayMenu.Items.Add(new ToolStripSeparator());
-            _trayMenu.Items.Add("Exit", null, (s, e) => ExitApp());
+            _trayMenu.Items.Add(Loc.T("Exit"), null, (s, e) => ExitApp());
 
-            _tray.Icon = SystemIcons.Application;
-            _tray.Text = "Touch Bar Studio";
-            _tray.ContextMenuStrip = _trayMenu;
-            _tray.Visible = true;
-            _tray.DoubleClick += (s, e) => ShowEditor();
+            Theme.StyleMenu(_trayMenu);
+            if (_tray.ContextMenuStrip == null)
+            {
+                _tray.Icon = SystemIcons.Application;
+                _tray.Text = "Touch Bar Studio";
+                _tray.ContextMenuStrip = _trayMenu;
+                _tray.Visible = true;
+                _tray.DoubleClick += (s, e) => ShowEditor();
+            }
         }
 
         void ShowEditor()
@@ -431,7 +447,7 @@ namespace TouchBarStudio
             }
             catch (Win32Exception)
             {
-                _lastAction = "Administrator restart was cancelled";
+                _lastAction = Loc.T("Administrator restart was cancelled");
                 UpdateStatus();
             }
         }
@@ -444,15 +460,42 @@ namespace TouchBarStudio
             Theme.StyleMenu(menu);
             void Add(string text, ItemType type) => menu.Items.Add(text, null, (s, e) => AddItem(type));
 
-            Add("Program or app", ItemType.App);
-            Add("Media key (play, volume...)", ItemType.Media);
-            Add("Keyboard shortcut", ItemType.Hotkey);
-            Add("Command", ItemType.Command);
-            Add("Website", ItemType.Url);
-            Add("Clock", ItemType.Clock);
-            Add("Text label", ItemType.Text);
-            Add("Switch to page", ItemType.Page);
-            Add("Lock screen", ItemType.LockScreen);
+            Add(Loc.T("Program or app"), ItemType.App);
+            Add(Loc.T("Media key (play, volume...)"), ItemType.Media);
+            Add(Loc.T("Keyboard shortcut"), ItemType.Hotkey);
+            Add(Loc.T("Command"), ItemType.Command);
+            Add(Loc.T("Website"), ItemType.Url);
+            Add(Loc.T("Clock"), ItemType.Clock);
+            Add(Loc.T("Text label"), ItemType.Text);
+            Add(Loc.T("Switch to page"), ItemType.Page);
+            Add(Loc.T("Lock screen"), ItemType.LockScreen);
+            menu.Items.Add(new ToolStripSeparator());
+            Add(Loc.T("Brightness slider"), ItemType.Brightness);
+            Add(Loc.T("Volume slider"), ItemType.Volume);
+            Add(Loc.T("Media timeline (scrubber)"), ItemType.Scrubber);
+            Add(Loc.T("Microphone mute"), ItemType.MicMute);
+
+            var quick = new ToolStripMenuItem(Loc.T("Quick actions"));
+            Theme.StyleMenu(quick.DropDown);
+            void Quick(string label, string combo) => quick.DropDownItems.Add(Loc.T(label), null, (s, e) => AddQuickAction(label, combo));
+            Quick("Copy", "ctrl+c");
+            Quick("Paste", "ctrl+v");
+            Quick("Cut", "ctrl+x");
+            Quick("Undo", "ctrl+z");
+            Quick("Redo", "ctrl+y");
+            Quick("Select all", "ctrl+a");
+            Quick("Clipboard history", "win+v");
+            Quick("Screenshot", "win+shift+s");
+            Quick("Task view", "win+tab");
+            Quick("Show desktop", "win+d");
+            quick.DropDownItems.Add(Loc.T("Notifications settings"), null, (s, e) =>
+            {
+                _page.Items.Add(new BarItem { Type = ItemType.Url, Label = Loc.T("Notifications settings"), Url = "ms-settings:notifications", Width = 230 });
+                FillList(_page.Items.Count - 1);
+                _cfg.Save();
+                RefreshBar();
+            });
+            menu.Items.Add(quick);
             menu.Show(anchor, new Point(0, anchor.Height));
         }
 
@@ -461,12 +504,12 @@ namespace TouchBarStudio
             var menu = new ContextMenuStrip();
             Theme.StyleMenu(menu);
 
-            var themeItem = new ToolStripMenuItem("Theme");
+            var themeItem = new ToolStripMenuItem(Loc.T("Theme"));
             Theme.StyleMenu(themeItem.DropDown);
             foreach (ThemeMode mode in Enum.GetValues(typeof(ThemeMode)))
             {
                 var selected = mode;
-                string label = selected == ThemeMode.Auto ? "Follow Windows" : selected.ToString();
+                string label = selected == ThemeMode.Auto ? Loc.T("Follow Windows") : (selected == ThemeMode.Light ? Loc.T("Light") : Loc.T("Dark"));
                 themeItem.DropDownItems.Add(new ToolStripMenuItem(label, null, (s, e) =>
                 {
                     _cfg.Theme = selected;
@@ -477,7 +520,24 @@ namespace TouchBarStudio
             }
 
             menu.Items.Add(themeItem);
-            menu.Items.Add(new ToolStripMenuItem("Start with Windows", null, (s, e) =>
+
+            var languageItem = new ToolStripMenuItem(Loc.T("Language"));
+            Theme.StyleMenu(languageItem.DropDown);
+            foreach (var entry in new[] { ("auto", Loc.T("Automatic")), ("en", "English"), ("ru", "Русский"), ("ky", "Кыргызча") })
+            {
+                var code = entry.Item1;
+                languageItem.DropDownItems.Add(new ToolStripMenuItem(entry.Item2, null, (s, e) =>
+                {
+                    _cfg.Language = code;
+                    _cfg.Save();
+                    Loc.Set(code);
+                    ApplyLanguage();
+                })
+                { Checked = _cfg.Language == code });
+            }
+
+            menu.Items.Add(languageItem);
+            menu.Items.Add(new ToolStripMenuItem(Loc.T("Start with Windows"), null, (s, e) =>
             {
                 bool enable = !IsAutoStart();
                 SetAutoStart(enable);
@@ -485,13 +545,27 @@ namespace TouchBarStudio
                 _cfg.Save();
             })
             { Checked = IsAutoStart() });
-            menu.Items.Add(new ToolStripMenuItem("Start minimized to tray", null, (s, e) =>
+            menu.Items.Add(new ToolStripMenuItem(Loc.T("Start minimized to tray"), null, (s, e) =>
             {
                 _cfg.StartMinimized = !_cfg.StartMinimized;
                 _cfg.Save();
             })
             { Checked = _cfg.StartMinimized });
-            menu.Items.Add("Bar background color...", null, (s, e) =>
+            menu.Items.Add(new ToolStripMenuItem(Loc.T("Switch pages by active program"), null, (s, e) =>
+            {
+                _cfg.AutoSwitchPages = !_cfg.AutoSwitchPages;
+                _cfg.Save();
+            })
+            { Checked = _cfg.AutoSwitchPages });
+            menu.Items.Add(Loc.T("Add preset pages"), null, (s, e) =>
+            {
+                if (_cfg.AddPresetPages() > 0)
+                {
+                    _cfg.Save();
+                    RebuildPageBar();
+                }
+            });
+            menu.Items.Add(Loc.T("Bar background color..."), null, (s, e) =>
             {
                 using (var dialog = new ColorDialog { Color = _cfg.BarBackground, FullOpen = true })
                 {
@@ -504,8 +578,8 @@ namespace TouchBarStudio
                 }
             });
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Restart as administrator", null, (s, e) => RestartAsAdmin());
-            menu.Items.Add("Open config folder", null, (s, e) =>
+            menu.Items.Add(Loc.T("Restart as administrator"), null, (s, e) => RestartAsAdmin());
+            menu.Items.Add(Loc.T("Open config folder"), null, (s, e) =>
             {
                 try
                 {
@@ -517,11 +591,11 @@ namespace TouchBarStudio
                 }
             });
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("About", null, (s, e) => MessageBox.Show(this,
+            menu.Items.Add(Loc.T("About"), null, (s, e) => MessageBox.Show(this,
                 "Touch Bar Studio " + typeof(MainForm).Assembly.GetName().Version + "\n\n" +
-                "Driver: DFRDisplayKm by Bingxing Wang (MIT license).\n" +
-                "This fork and app: Aibek Malikov.",
-                "About", MessageBoxButtons.OK, MessageBoxIcon.Information));
+                Loc.T("Driver: DFRDisplayKm by Bingxing Wang (MIT license).") + "\n" +
+                Loc.T("This fork and app: Aibek Malikov."),
+                Loc.T("About"), MessageBoxButtons.OK, MessageBoxIcon.Information));
             menu.Show(anchor, new Point(0, anchor.Height));
         }
 
@@ -529,8 +603,9 @@ namespace TouchBarStudio
         {
             var menu = new ContextMenuStrip();
             Theme.StyleMenu(menu);
-            menu.Items.Add("Rename...", null, (s, e) => RenamePage(page));
-            menu.Items.Add("Delete", null, (s, e) => DeletePage(page));
+            menu.Items.Add(Loc.T("Rename..."), null, (s, e) => RenamePage(page));
+            menu.Items.Add(Loc.T("Auto-switch for programs..."), null, (s, e) => EditPageProcesses(page));
+            menu.Items.Add(Loc.T("Delete"), null, (s, e) => DeletePage(page));
             menu.Show(chip, new Point(0, chip.Height));
         }
 
@@ -624,7 +699,7 @@ namespace TouchBarStudio
             var page = _cfg.Pages.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
             if (page == null)
             {
-                throw new InvalidOperationException("No page named \"" + name + "\"");
+                throw new InvalidOperationException(Loc.F("No page named \"{0}\"", name));
             }
 
             SelectPage(page);
@@ -632,12 +707,12 @@ namespace TouchBarStudio
 
         void NewPage()
         {
-            string name = Prompt("New page", "Page name", "Page " + (_cfg.Pages.Count + 1));
+            string name = Prompt(Loc.T("New page"), Loc.T("Page name"), Loc.T("Page") + " " + (_cfg.Pages.Count + 1));
             if (string.IsNullOrEmpty(name)) return;
 
             if (_cfg.Pages.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
-                MessageBox.Show(this, "A page with this name already exists.");
+                MessageBox.Show(this, Loc.T("A page with this name already exists."));
                 return;
             }
 
@@ -650,12 +725,12 @@ namespace TouchBarStudio
         void RenamePage(BarPage page)
         {
             string old = page.Name;
-            string name = Prompt("Rename page", "Page name", old);
+            string name = Prompt(Loc.T("Rename page"), Loc.T("Page name"), old);
             if (string.IsNullOrEmpty(name) || name == old) return;
 
             if (_cfg.Pages.Any(p => p != page && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
-                MessageBox.Show(this, "A page with this name already exists.");
+                MessageBox.Show(this, Loc.T("A page with this name already exists."));
                 return;
             }
 
@@ -677,11 +752,11 @@ namespace TouchBarStudio
         {
             if (_cfg.Pages.Count <= 1)
             {
-                MessageBox.Show(this, "At least one page is required.");
+                MessageBox.Show(this, Loc.T("At least one page is required."));
                 return;
             }
 
-            if (MessageBox.Show(this, "Delete page \"" + page.Name + "\"?", "Touch Bar Studio",
+            if (MessageBox.Show(this, Loc.F("Delete page \"{0}\"?", page.Name), "Touch Bar Studio",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             {
                 return;
@@ -704,18 +779,30 @@ namespace TouchBarStudio
             var item = new BarItem { Type = type, Label = type.ToString() };
             switch (type)
             {
-                case ItemType.App: item.Label = "App"; item.Width = 190; break;
-                case ItemType.Media: item.Label = "Play/Pause"; item.Width = 120; break;
-                case ItemType.Hotkey: item.Label = "Shortcut"; item.Hotkey = "ctrl+c"; break;
-                case ItemType.Command: item.Label = "Command"; break;
-                case ItemType.Url: item.Label = "Web"; item.Url = "https://"; break;
+                case ItemType.App: item.Label = Loc.T("App"); item.Width = 190; break;
+                case ItemType.Media: item.Label = Loc.T("Play/Pause"); item.Width = 120; break;
+                case ItemType.Hotkey: item.Label = Loc.T("Shortcut"); item.Hotkey = "ctrl+c"; break;
+                case ItemType.Command: item.Label = Loc.T("Command"); break;
+                case ItemType.Url: item.Label = Loc.T("Web"); item.Url = "https://"; break;
                 case ItemType.Clock: item.Label = ""; item.Width = 220; item.Align = ItemAlign.Right; break;
-                case ItemType.Text: item.Label = "Text"; break;
-                case ItemType.Page: item.Label = "Page"; item.TargetPage = _page.Name; break;
-                case ItemType.LockScreen: item.Label = "Lock"; item.Width = 110; break;
+                case ItemType.Text: item.Label = Loc.T("Text"); break;
+                case ItemType.Page: item.Label = Loc.T("Page"); item.TargetPage = _page.Name; break;
+                case ItemType.LockScreen: item.Label = Loc.T("Lock"); item.Width = 110; break;
+                case ItemType.Brightness: item.Label = ""; item.Width = 380; break;
+                case ItemType.Volume: item.Label = ""; item.Width = 380; break;
+                case ItemType.Scrubber: item.Label = ""; item.Width = 1000; break;
+                case ItemType.MicMute: item.Label = Loc.T("Mic"); item.Width = 150; break;
             }
 
             _page.Items.Add(item);
+            FillList(_page.Items.Count - 1);
+            _cfg.Save();
+            RefreshBar();
+        }
+
+        void AddQuickAction(string label, string combo)
+        {
+            _page.Items.Add(new BarItem { Type = ItemType.Hotkey, Label = Loc.T(label), Hotkey = combo, Width = Math.Max(120, TextRenderer.MeasureText(Loc.T(label), Theme.UiFont).Width + 60) });
             FillList(_page.Items.Count - 1);
             _cfg.Save();
             RefreshBar();
@@ -750,8 +837,8 @@ namespace TouchBarStudio
         {
             using (var dialog = new OpenFileDialog
             {
-                Title = "Choose programs",
-                Filter = "Programs and shortcuts|*.exe;*.lnk;*.bat;*.cmd|All files|*.*",
+                Title = Loc.T("Choose programs"),
+                Filter = Loc.T("Programs and shortcuts|*.exe;*.lnk;*.bat;*.cmd|All files|*.*"),
                 Multiselect = true
             })
             {
@@ -787,13 +874,71 @@ namespace TouchBarStudio
             RefreshBar();
         }
 
+        const string ReorderFormat = "TouchBarStudio.ItemIndex";
+        Point _listDragStart;
+        int _listDragIndex = -1;
+
+        void MoveItemTo(int from, int to)
+        {
+            if (from < 0 || from >= _page.Items.Count || to < 0 || to >= _page.Items.Count || from == to) return;
+
+            var item = _page.Items[from];
+            _page.Items.RemoveAt(from);
+            _page.Items.Insert(to, item);
+            FillList(to);
+            _cfg.Save();
+            RefreshBar();
+        }
+
+        void HookListReorder()
+        {
+            _list.MouseDown += (s, e) =>
+            {
+                _listDragStart = e.Location;
+                _listDragIndex = e.Button == MouseButtons.Left ? _list.IndexFromPoint(e.Location) : -1;
+            };
+            _list.MouseUp += (s, e) => _listDragIndex = -1;
+            _list.MouseMove += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left && _listDragIndex >= 0 &&
+                    (Math.Abs(e.X - _listDragStart.X) > 8 || Math.Abs(e.Y - _listDragStart.Y) > 8))
+                {
+                    int index = _listDragIndex;
+                    _listDragIndex = -1;
+                    _list.DoDragDrop(new DataObject(ReorderFormat, index), DragDropEffects.Move);
+                }
+            };
+        }
+
         void HookDrop(Control control)
         {
             control.AllowDrop = true;
             control.DragEnter += (s, e) =>
-                e.Effect = e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+            {
+                if (e.Data != null && e.Data.GetDataPresent(ReorderFormat))
+                    e.Effect = control == _list ? DragDropEffects.Move : DragDropEffects.None;
+                else
+                    e.Effect = e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+            };
+            control.DragOver += (s, e) =>
+            {
+                if (e.Data != null && e.Data.GetDataPresent(ReorderFormat))
+                    e.Effect = control == _list ? DragDropEffects.Move : DragDropEffects.None;
+            };
             control.DragDrop += (s, e) =>
             {
+                if (e.Data != null && e.Data.GetDataPresent(ReorderFormat))
+                {
+                    if (control == _list && e.Data.GetData(ReorderFormat) is int from)
+                    {
+                        int to = _list.IndexFromPoint(_list.PointToClient(new Point(e.X, e.Y)));
+                        if (to < 0) to = _list.Items.Count - 1;
+                        MoveItemTo(from, to);
+                    }
+
+                    return;
+                }
+
                 if (e.Data?.GetData(DataFormats.FileDrop) is string[] files)
                 {
                     AddApps(files);
@@ -803,18 +948,23 @@ namespace TouchBarStudio
 
         static string Describe(BarItem item)
         {
+            string notSet = Loc.T("not set");
             switch (item.Type)
             {
                 case ItemType.App:
-                    return string.IsNullOrWhiteSpace(item.Path) ? "Program: not set" : System.IO.Path.GetFileName(item.Path);
-                case ItemType.Media: return "Media: " + item.Media;
-                case ItemType.Hotkey: return "Shortcut: " + (string.IsNullOrWhiteSpace(item.Hotkey) ? "not set" : item.Hotkey);
-                case ItemType.Command: return "Command: " + (string.IsNullOrWhiteSpace(item.Command) ? "not set" : item.Command);
-                case ItemType.Url: return string.IsNullOrWhiteSpace(item.Url) ? "Website: not set" : item.Url;
-                case ItemType.Clock: return "Clock: " + item.ClockFormat;
-                case ItemType.Text: return "Text label";
-                case ItemType.Page: return "Open page: " + item.TargetPage;
-                case ItemType.LockScreen: return "Lock screen";
+                    return string.IsNullOrWhiteSpace(item.Path) ? Loc.T("Program: not set") : System.IO.Path.GetFileName(item.Path);
+                case ItemType.Media: return Loc.F("Media: {0}", item.Media);
+                case ItemType.Hotkey: return Loc.F("Shortcut: {0}", string.IsNullOrWhiteSpace(item.Hotkey) ? notSet : item.Hotkey);
+                case ItemType.Command: return Loc.F("Command: {0}", string.IsNullOrWhiteSpace(item.Command) ? notSet : item.Command);
+                case ItemType.Url: return string.IsNullOrWhiteSpace(item.Url) ? Loc.T("Website: not set") : item.Url;
+                case ItemType.Clock: return Loc.F("Clock: {0}", item.ClockFormat);
+                case ItemType.Text: return Loc.T("Text label");
+                case ItemType.Page: return Loc.F("Open page: {0}", item.TargetPage);
+                case ItemType.LockScreen: return Loc.T("Lock screen");
+                case ItemType.Brightness: return Loc.T("Brightness slider");
+                case ItemType.Volume: return Loc.T("Volume slider");
+                case ItemType.Scrubber: return Loc.T("Media timeline (scrubber)");
+                case ItemType.MicMute: return Loc.T("Microphone mute");
                 default: return item.Type.ToString();
             }
         }
@@ -918,22 +1068,172 @@ namespace TouchBarStudio
                 ? (p.Dark ? Color.FromArgb(0x6C, 0xCB, 0x5F) : Color.FromArgb(0x10, 0x7C, 0x10))
                 : (p.Dark ? Color.FromArgb(0xFF, 0x99, 0xA4) : Color.FromArgb(0xC4, 0x2B, 0x1C));
 
-            _statusText.Text = "Display: " + (_device.IsOpen ? "connected" : _device.Error) +
-                               "     Touch: " + _touchState +
+            _statusText.Text = Loc.F("Display: {0}", _device.IsOpen ? Loc.T("connected") : _device.Error) +
+                               "     " + Loc.F("Touch: {0}", Loc.T(_touchState)) +
                                (string.IsNullOrEmpty(_lastAction) ? "" : "     " + _lastAction);
         }
 
         void OnTick(object sender, EventArgs e)
         {
             _tick++;
-            if (ClockSignature() != _lastClock)
+            bool redraw = ClockSignature() != _lastClock;
+
+            bool hasAudio = _page.Items.Any(i => i.Type == ItemType.Volume || i.Type == ItemType.MicMute);
+            if (SystemState.PollAudio() && hasAudio && _drag < 0)
+            {
+                redraw = true;
+            }
+
+            if (_tick % 5 == 0 && _page.Items.Any(i => i.Type == ItemType.Brightness) && _drag < 0)
+            {
+                _ = SystemControls.RefreshBrightnessAsync();
+            }
+
+            var media = SystemState.Media;
+            if (media != null && media.HasSession && media.Playing && _page.Items.Any(i => i.Type == ItemType.Scrubber) && _drag < 0)
+            {
+                redraw = true; // timeline moves once per second
+            }
+
+            if (redraw)
             {
                 RefreshBar();
+            }
+
+            if (_cfg.AutoSwitchPages)
+            {
+                AutoSwitchPage();
             }
 
             if (_tick % 5 == 0)
             {
                 TryConnect();
+            }
+        }
+
+        void StartSystemServices()
+        {
+            try
+            {
+                var media = new MediaService();
+                media.Changed += () => OnUi(() =>
+                {
+                    if (_drag < 0 && _page != null && _page.Items.Any(i => i.Type == ItemType.Scrubber))
+                    {
+                        RefreshBar();
+                    }
+                });
+                SystemState.Media = media;
+                _ = media.StartAsync();
+            }
+            catch
+            {
+                // Media session API unavailable: the timeline tile will say that nothing is playing.
+            }
+
+            SystemState.PollAudio();
+            _ = SystemControls.RefreshBrightnessAsync();
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern IntPtr GetForegroundWindow();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        static string ForegroundProcessName()
+        {
+            try
+            {
+                var hwnd = GetForegroundWindow();
+                if (hwnd == IntPtr.Zero) return "";
+                GetWindowThreadProcessId(hwnd, out uint pid);
+                if (pid == 0) return "";
+                using (var process = Process.GetProcessById((int)pid))
+                {
+                    return process.ProcessName ?? "";
+                }
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// Context presets: shows the page whose program list contains the active window's program,
+        /// and returns to the previous page when no page matches. TouchBarStudio itself is ignored.
+        /// </summary>
+        void AutoSwitchPage()
+        {
+            string name = ForegroundProcessName();
+            if (name.Length == 0 || name == _lastForeground) return;
+            _lastForeground = name;
+
+            if (string.Equals(name, System.IO.Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? ""), StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var match = _cfg.Pages.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Processes) &&
+                p.Processes.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Any(x => string.Equals(x.Trim().Replace(".exe", ""), name, StringComparison.OrdinalIgnoreCase)));
+
+            if (match != null)
+            {
+                if (match != _page)
+                {
+                    if (_homePage == null) _homePage = _page;
+                    SelectPage(match);
+                }
+            }
+            else if (_homePage != null)
+            {
+                var home = _homePage;
+                _homePage = null;
+                if (_cfg.Pages.Contains(home)) SelectPage(home);
+            }
+        }
+
+        void EditPageProcesses(BarPage page)
+        {
+            string value = Prompt(Loc.T("Programs for this page"),
+                Loc.T("Program names separated by commas, for example: chrome, spotify. Leave empty to turn off."),
+                page.Processes ?? "");
+            if (value == null) return;
+
+            page.Processes = value;
+            _cfg.Save();
+        }
+
+        void ApplyLanguage()
+        {
+            _subtitle.Text = Loc.T("Tap a button in the preview to try it. Drop a program onto the window to add it.");
+            foreach (var button in AllButtons(this))
+            {
+                if (button.Tag is string key)
+                {
+                    button.Text = Loc.T(key);
+                    button.Width = Math.Max(button.Width, TextRenderer.MeasureText(button.Text, Theme.UiFont).Width + Theme.S(28));
+                }
+            }
+
+            BuildTray();
+            TypeDescriptor.Refresh(typeof(BarItem));
+            var selected = _grid.SelectedObject;
+            _grid.SelectedObject = null;
+            _grid.SelectedObject = selected;
+            _list.Invalidate();
+            RebuildPageBar();
+            UpdateStatus();
+        }
+
+        static IEnumerable<ModernButton> AllButtons(Control root)
+        {
+            foreach (Control c in root.Controls)
+            {
+                if (c is ModernButton b) yield return b;
+                foreach (var inner in AllButtons(c)) yield return inner;
             }
         }
 
@@ -997,39 +1297,131 @@ namespace TouchBarStudio
             return (int)Math.Max(0, Math.Min(Renderer.W - 1, fraction * Renderer.W));
         }
 
-        void TouchDown(double fraction)
+        static bool IsDraggable(BarItem item)
         {
-            _pressed = HitTest(BarX(fraction));
+            return item.Type == ItemType.Brightness || item.Type == ItemType.Volume || item.Type == ItemType.Scrubber;
+        }
+
+        void TouchDown(double fraction) => PressAt(BarX(fraction));
+
+        void TouchMove(double fraction) => MoveTo(BarX(fraction));
+
+        void TouchUp(double fraction) => ReleaseAt(BarX(fraction));
+
+        void PressAt(int x)
+        {
+            int hit = x < 0 ? -1 : HitTest(x);
+            if (hit >= 0 && IsDraggable(_tiles[hit].Item))
+            {
+                _drag = hit;
+                _pressed = -1;
+                ApplyDrag(x, false);
+                return;
+            }
+
+            _pressed = hit;
             RefreshBar();
         }
 
-        void TouchMove(double fraction)
+        void MoveTo(int x)
         {
-            if (_pressed >= 0 && HitTest(BarX(fraction)) != _pressed)
+            if (_drag >= 0)
+            {
+                ApplyDrag(x, false);
+                return;
+            }
+
+            if (_pressed >= 0 && HitTest(x) != _pressed)
             {
                 _pressed = -1;
                 RefreshBar();
             }
         }
 
-        void TouchUp(double fraction)
+        void ReleaseAt(int x)
         {
-            FinishPress(HitTest(BarX(fraction)));
+            if (_drag >= 0)
+            {
+                ApplyDrag(x, true);
+                _drag = -1;
+                return;
+            }
+
+            FinishPress(x < 0 ? -1 : HitTest(x));
+        }
+
+        /// <summary>Sets the value of the slider or timeline under the finger. The finger may leave the tile; the value is clamped.</summary>
+        void ApplyDrag(int x, bool final)
+        {
+            if (_drag < 0 || _drag >= _tiles.Count) return;
+
+            var tile = _tiles[_drag];
+            double f = Math.Max(0.0, Math.Min(1.0, (x - tile.Rect.X) / (double)tile.Rect.Width));
+            try
+            {
+                switch (tile.Item.Type)
+                {
+                    case ItemType.Volume:
+                        SystemControls.SetVolume(f);
+                        break;
+                    case ItemType.Brightness:
+                        if (SystemState.BrightnessSupported)
+                        {
+                            SystemControls.SetBrightness((int)Math.Round(f * 100));
+                        }
+                        else
+                        {
+                            _lastAction = Loc.T("Brightness control is not available on this display");
+                        }
+
+                        break;
+                    case ItemType.Scrubber:
+                        var media = SystemState.Media;
+                        if (media != null && media.CanSeek)
+                        {
+                            SystemState.ScrubFraction = f;
+                            if (final)
+                            {
+                                double target = f * media.Duration;
+                                SystemState.ScrubFraction = -1;
+                                _ = media.SeekAsync(target);
+                            }
+                        }
+
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _lastAction = Loc.F("Error: {0}", ex.Message);
+            }
+
+            if (final && tile.Item.Type != ItemType.Scrubber)
+            {
+                SystemState.PollAudio();
+            }
+
+            RefreshBar();
         }
 
         void OnPreviewDown(object sender, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left) return;
-            int x = _preview.ToBarX(e.Location);
-            _pressed = x < 0 ? -1 : HitTest(x);
-            RefreshBar();
+            PressAt(_preview.ToBarX(e.Location));
+        }
+
+        void OnPreviewMove(object sender, MouseEventArgs e)
+        {
+            if (_drag >= 0 && e.Button == MouseButtons.Left)
+            {
+                MoveTo(_preview.ToBarX(e.Location, true));
+            }
         }
 
         void OnPreviewUp(object sender, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left) return;
-            int x = _preview.ToBarX(e.Location);
-            FinishPress(x < 0 ? -1 : HitTest(x));
+            ReleaseAt(_drag >= 0 ? _preview.ToBarX(e.Location, true) : _preview.ToBarX(e.Location));
         }
 
         void FinishPress(int hit)
@@ -1051,17 +1443,17 @@ namespace TouchBarStudio
                 if (item.Type == ItemType.Page)
                 {
                     GoToPage(item.TargetPage);
-                    _lastAction = "Page: " + item.TargetPage;
+                    _lastAction = Loc.F("Page: {0}", item.TargetPage);
                 }
                 else
                 {
                     Actions.Run(item);
-                    _lastAction = "Ran: " + item;
+                    _lastAction = Loc.F("Ran: {0}", item);
                 }
             }
             catch (Exception ex)
             {
-                _lastAction = "Error: " + ex.Message;
+                _lastAction = Loc.F("Error: {0}", ex.Message);
             }
 
             UpdateStatus();
@@ -1134,8 +1526,8 @@ namespace TouchBarStudio
                     ForeColor = p.Text,
                     BorderStyle = BorderStyle.FixedSingle
                 };
-                var ok = new ModernButton { Text = "OK", Accent = true, Left = Theme.S(190), Top = Theme.S(96), Width = Theme.S(80) };
-                var cancel = new ModernButton { Text = "Cancel", Left = Theme.S(280), Top = Theme.S(96), Width = Theme.S(80) };
+                var ok = new ModernButton { Text = Loc.T("OK"), Accent = true, Left = Theme.S(190), Top = Theme.S(96), Width = Theme.S(80) };
+                var cancel = new ModernButton { Text = Loc.T("Cancel"), Left = Theme.S(280), Top = Theme.S(96), Width = Theme.S(80) };
                 ok.Click += (s, e) => form.DialogResult = DialogResult.OK;
                 cancel.Click += (s, e) => form.DialogResult = DialogResult.Cancel;
                 box.KeyDown += (s, e) =>
