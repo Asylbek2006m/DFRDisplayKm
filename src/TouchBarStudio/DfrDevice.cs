@@ -13,9 +13,12 @@ namespace TouchBarStudio
     public unsafe class DfrDevice : IDisposable
     {
         const int HeaderSize = 16;
+        const int PixelBytes = Renderer.W * Renderer.H * 3;
 
         readonly object _lock = new object();
         readonly byte[] _buffer = new byte[HeaderSize + Renderer.W * Renderer.H * 3];
+        readonly byte[] _last = new byte[PixelBytes];
+        bool _hasLast;
         IntPtr _handle = IntPtr.Zero;
 
         public bool IsOpen => _handle != IntPtr.Zero;
@@ -52,6 +55,7 @@ namespace TouchBarStudio
                     }
 
                     _handle = handle;
+                    _hasLast = false;
                     Error = "";
                     return true;
                 }
@@ -103,10 +107,27 @@ namespace TouchBarStudio
                             }
                         }
 
+                        // Identical to what is already on the bar: nothing to send.
+                        if (_hasLast &&
+                            new ReadOnlySpan<byte>(dst0 + HeaderSize, PixelBytes).SequenceEqual(new ReadOnlySpan<byte>(_last)))
+                        {
+                            return true;
+                        }
+
                         ok = IoCtl.DeviceIoControl(
                             _handle, DfrHostIo.IOCTL_DFR_UPDATE_FRAMEBUFFER,
                             (IntPtr)dst0, _buffer.Length,
                             IntPtr.Zero, 0, IntPtr.Zero, IntPtr.Zero);
+                    }
+
+                    if (ok)
+                    {
+                        Buffer.BlockCopy(_buffer, HeaderSize, _last, 0, PixelBytes);
+                        _hasLast = true;
+                    }
+                    else
+                    {
+                        _hasLast = false;
                     }
 
                     if (!ok)
@@ -123,10 +144,20 @@ namespace TouchBarStudio
             }
         }
 
+        /// <summary>Forget the last frame so the next SendFrame always reaches the device.</summary>
+        public void Invalidate()
+        {
+            lock (_lock)
+            {
+                _hasLast = false;
+            }
+        }
+
         public bool Clear()
         {
             lock (_lock)
             {
+                _hasLast = false;
                 return IsOpen && IoCtl.ClearDfrFrameBuffer(_handle);
             }
         }

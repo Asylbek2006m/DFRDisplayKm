@@ -79,6 +79,7 @@ namespace TouchBarStudio
         public List<BarPage> Pages { get; set; } = new List<BarPage>();
         public bool AutoStart { get; set; }
         public bool StartMinimized { get; set; }
+        public ThemeMode Theme { get; set; } = ThemeMode.Auto;
         public Color BarBackground { get; set; } = Color.Black;
 
         static readonly JsonSerializerOptions Options = new JsonSerializerOptions

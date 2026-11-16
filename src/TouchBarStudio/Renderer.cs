@@ -16,7 +16,10 @@ namespace TouchBarStudio
         public Rectangle Rect;
     }
 
-    /// <summary>Lays out and draws a page of items into a 2170 x 60 bitmap.</summary>
+    /// <summary>
+    /// Lays out and draws a page of items into a 2170 x 60 bitmap.
+    /// The bitmap, graphics object and fonts are created once and reused for every frame.
+    /// </summary>
     public class Renderer : IDisposable
     {
         public const int W = 2170;
@@ -27,7 +30,28 @@ namespace TouchBarStudio
         const int TileHeight = 48;
         const int IconSize = 32;
 
+        readonly Bitmap _frame = new Bitmap(W, H, PixelFormat.Format32bppArgb);
+        readonly Graphics _graphics;
+        readonly Font _font = new Font("Segoe UI", 20, FontStyle.Regular, GraphicsUnit.Pixel);
+        readonly StringFormat _format = new StringFormat
+        {
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center,
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
         readonly Dictionary<string, Image> _icons = new Dictionary<string, Image>();
+
+        public Renderer()
+        {
+            _graphics = Graphics.FromImage(_frame);
+            _graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            _graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            _graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        }
+
+        /// <summary>The last rendered frame. Owned by the renderer; do not dispose.</summary>
+        public Bitmap Frame => _frame;
 
         public List<Tile> Layout(BarPage page)
         {
@@ -68,34 +92,16 @@ namespace TouchBarStudio
 
         public Bitmap Render(AppConfig cfg, List<Tile> tiles, int pressedIndex)
         {
-            var bmp = new Bitmap(W, H, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(bmp))
+            _graphics.Clear(Color.FromArgb(255, cfg.BarBackground));
+            for (int i = 0; i < tiles.Count; i++)
             {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-                g.Clear(Color.FromArgb(255, cfg.BarBackground));
-
-                using (var font = new Font("Segoe UI", 20, FontStyle.Regular, GraphicsUnit.Pixel))
-                using (var format = new StringFormat
-                {
-                    Alignment = StringAlignment.Center,
-                    LineAlignment = StringAlignment.Center,
-                    Trimming = StringTrimming.EllipsisCharacter,
-                    FormatFlags = StringFormatFlags.NoWrap
-                })
-                {
-                    for (int i = 0; i < tiles.Count; i++)
-                    {
-                        DrawTile(g, tiles[i], i == pressedIndex, font, format);
-                    }
-                }
+                DrawTile(_graphics, tiles[i], i == pressedIndex);
             }
 
-            return bmp;
+            return _frame;
         }
 
-        void DrawTile(Graphics g, Tile tile, bool pressed, Font font, StringFormat format)
+        void DrawTile(Graphics g, Tile tile, bool pressed)
         {
             var item = tile.Item;
             var rect = tile.Rect;
@@ -129,10 +135,13 @@ namespace TouchBarStudio
             {
                 using (var brush = new SolidBrush(item.ForeColor))
                 {
-                    g.DrawString(text, font, brush, textRect, format);
+                    g.DrawString(text, _font, brush, textRect, _format);
                 }
             }
         }
+
+        /// <summary>Icon used for an item (its own icon file, or the program's icon). May be null.</summary>
+        public Image IconFor(BarItem item) => GetIcon(item);
 
         Image GetIcon(BarItem item)
         {
@@ -241,6 +250,13 @@ namespace TouchBarStudio
             _icons.Clear();
         }
 
-        public void Dispose() => ClearIconCache();
+        public void Dispose()
+        {
+            ClearIconCache();
+            _graphics.Dispose();
+            _frame.Dispose();
+            _font.Dispose();
+            _format.Dispose();
+        }
     }
 }
