@@ -61,7 +61,22 @@ namespace TouchBarStudio
                     break;
                 case ItemType.Url:
                     if (string.IsNullOrWhiteSpace(item.Url)) throw new InvalidOperationException("Url is empty");
-                    Process.Start(new ProcessStartInfo(item.Url) { UseShellExecute = true });
+                    Process.Start(new ProcessStartInfo(ExpandUrl(item.Url)) { UseShellExecute = true });
+                    break;
+                case ItemType.Clipboard:
+                    ClipboardHistory.Restore(item.Slot);
+                    break;
+                case ItemType.Calc:
+                    CalcEngine.Press(item.Label);
+                    break;
+                case ItemType.CalcDisplay:
+                    System.Windows.Forms.Clipboard.SetText(CalcEngine.Entry);
+                    break;
+                case ItemType.Wifi:
+                    _ = RadioControl.ToggleAsync(Windows.Devices.Radios.RadioKind.WiFi);
+                    break;
+                case ItemType.Bluetooth:
+                    _ = RadioControl.ToggleAsync(Windows.Devices.Radios.RadioKind.Bluetooth);
                     break;
                 case ItemType.LockScreen:
                     LockWorkStation();
@@ -74,6 +89,35 @@ namespace TouchBarStudio
                     // sliders and the timeline react to dragging, not to a tap.
                     break;
             }
+        }
+
+        /// <summary>
+        /// Replaces {clipboard} and {selection} in a URL with URL-encoded text.
+        /// {selection} first sends Ctrl+C to the active program and then reads the clipboard.
+        /// </summary>
+        static string ExpandUrl(string url)
+        {
+            if (!url.Contains("{clipboard}") && !url.Contains("{selection}")) return url;
+
+            if (url.Contains("{selection}"))
+            {
+                SendHotkey("ctrl+c");
+                System.Threading.Thread.Sleep(250);
+            }
+
+            string text = "";
+            try
+            {
+                text = System.Windows.Forms.Clipboard.GetText() ?? "";
+            }
+            catch
+            {
+            }
+
+            if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("Clipboard is empty");
+            if (text.Length > 500) text = text.Substring(0, 500);
+            string encoded = Uri.EscapeDataString(text.Trim());
+            return url.Replace("{selection}", encoded).Replace("{clipboard}", encoded);
         }
 
         static void StartProgram(string path, string arguments)

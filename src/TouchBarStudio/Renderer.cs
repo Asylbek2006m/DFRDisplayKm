@@ -128,6 +128,10 @@ namespace TouchBarStudio
             {
                 background = Color.FromArgb(0xB0, 0x2A, 0x2A);
             }
+            else if ((item.Type == ItemType.Wifi && RadioControl.Wifi == 1) || (item.Type == ItemType.Bluetooth && RadioControl.Bluetooth == 1))
+            {
+                background = item.AccentColor;
+            }
 
             using (var path = RoundedRect(rect, 10))
             using (var brush = new SolidBrush(Color.FromArgb(255, background)))
@@ -155,6 +159,28 @@ namespace TouchBarStudio
             {
                 text = SystemState.MicMuted == 1 ? Loc.T("Mic off") : (string.IsNullOrEmpty(text) ? Loc.T("Mic") : text);
             }
+            switch (item.Type)
+            {
+                case ItemType.Battery:
+                    text = BatteryText();
+                    break;
+                case ItemType.Clipboard:
+                    {
+                        string clip = ClipboardHistory.Get(item.Slot);
+                        text = clip == null ? "\u2014" : clip.Replace("\r", " ").Replace("\n", " ").Trim();
+                        break;
+                    }
+                case ItemType.CalcDisplay:
+                    text = CalcEngine.Entry;
+                    break;
+                case ItemType.Wifi:
+                    text = (string.IsNullOrEmpty(text) ? "Wi-Fi" : text) + (RadioControl.Wifi < 0 ? "  \u2014" : "");
+                    break;
+                case ItemType.Bluetooth:
+                    text = (string.IsNullOrEmpty(text) ? "Bluetooth" : text) + (RadioControl.Bluetooth < 0 ? "  \u2014" : "");
+                    break;
+            }
+
             var textRect = new Rectangle(rect.X + 4, rect.Y, rect.Width - 8, rect.Height);
 
             var icon = GetIcon(item);
@@ -215,6 +241,22 @@ namespace TouchBarStudio
                 {
                     g.DrawString(pct + "%", _font, fore, new Rectangle(rect.Right - 80, rect.Y, 68, rect.Height), _rightAligned);
                 }
+            }
+        }
+
+        static string BatteryText()
+        {
+            try
+            {
+                var power = System.Windows.Forms.SystemInformation.PowerStatus;
+                if (power.BatteryChargeStatus == System.Windows.Forms.BatteryChargeStatus.NoSystemBattery) return Loc.T("No battery");
+                float life = power.BatteryLifePercent;
+                string charging = power.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online ? " \u26A1" : "";
+                return life > 1f ? Loc.T("Battery") : Loc.T("Battery") + " " + (int)Math.Round(life * 100) + "%" + charging;
+            }
+            catch
+            {
+                return Loc.T("Battery");
             }
         }
 

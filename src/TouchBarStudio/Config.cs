@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 
 namespace TouchBarStudio
 {
-    public enum ItemType { App, Media, Hotkey, Command, Url, Clock, Text, Page, LockScreen, Brightness, Volume, Scrubber, MicMute }
+    public enum ItemType { App, Media, Hotkey, Command, Url, Clock, Text, Page, LockScreen, Brightness, Volume, Scrubber, MicMute, Battery, Clipboard, Calc, CalcDisplay, Wifi, Bluetooth }
 
     public enum MediaKey { PlayPause, Next, Previous, Mute, VolumeUp, VolumeDown }
 
@@ -65,6 +65,10 @@ namespace TouchBarStudio
         [LocCategory("2. Action"), LocDescription(".NET date format for type Clock, e.g. HH:mm or ddd d MMM HH:mm")]
         [LocName("ClockFormat")]
         public string ClockFormat { get; set; } = "HH:mm";
+
+        [LocCategory("2. Action"), LocDescription("Which clipboard history entry the item shows: 0 is the newest (type Clipboard).")]
+        [LocName("Slot")]
+        public int Slot { get; set; }
 
         [LocCategory("3. Look")]
         [LocName("Background")]
@@ -182,6 +186,7 @@ namespace TouchBarStudio
             main.Items.Add(GoTo("Media", "Media"));
             main.Items.Add(GoTo("Edit", "Edit"));
             main.Items.Add(GoTo("System", "System"));
+            main.Items.Add(GoTo("More", "More"));
             main.Items.Add(new BarItem
             {
                 Type = ItemType.Clock,
@@ -240,6 +245,78 @@ namespace TouchBarStudio
                 page.Items.Add(new BarItem { Type = ItemType.LockScreen, Label = Loc.T("Lock"), Width = 110 });
                 page.Items.Add(Key("Task view", "win+tab", 150));
                 page.Items.Add(Key("Show desktop", "win+d", 170));
+                Pages.Add(page);
+                added++;
+            }
+
+            if (Missing("Calculator"))
+            {
+                var page = new BarPage { Name = "Calculator" };
+                page.Items.Add(Back("Main"));
+                page.Items.Add(new BarItem { Type = ItemType.CalcDisplay, Label = "", Width = 300, Background = Color.FromArgb(0x1C, 0x1C, 0x22) });
+                string[] keys = { "7", "8", "9", "\u00F7", "4", "5", "6", "\u00D7", "1", "2", "3", "-", "0", ".", "=", "+", "C", "\u232B", "%", "\u00B1" };
+                foreach (var k in keys)
+                {
+                    bool op = "\u00F7\u00D7-+=".Contains(k);
+                    page.Items.Add(new BarItem
+                    {
+                        Type = ItemType.Calc,
+                        Label = k,
+                        Width = 72,
+                        Background = op ? Color.FromArgb(0xB3, 0x6A, 0x12) : (char.IsDigit(k[0]) || k == "." ? Color.FromArgb(0x38, 0x38, 0x40) : Color.FromArgb(0x55, 0x55, 0x5E))
+                    });
+                }
+
+                Pages.Add(page);
+                added++;
+            }
+
+            if (Missing("Clipboard"))
+            {
+                var page = new BarPage { Name = "Clipboard" };
+                page.Items.Add(Back("Main"));
+                for (int i = 0; i < 6; i++)
+                {
+                    page.Items.Add(new BarItem { Type = ItemType.Clipboard, Label = "", Slot = i, Width = 300 });
+                }
+
+                Pages.Add(page);
+                added++;
+            }
+
+            if (Missing("Search"))
+            {
+                var page = new BarPage { Name = "Search" };
+                page.Items.Add(Back("Main"));
+                page.Items.Add(new BarItem { Type = ItemType.Url, Label = "Google: " + Loc.T("selection"), Url = "https://www.google.com/search?q={selection}", Width = 330 });
+                page.Items.Add(new BarItem { Type = ItemType.Url, Label = "Google: " + Loc.T("clipboard"), Url = "https://www.google.com/search?q={clipboard}", Width = 330 });
+                page.Items.Add(new BarItem { Type = ItemType.Url, Label = "Bing: " + Loc.T("selection"), Url = "https://www.bing.com/search?q={selection}", Width = 330 });
+                page.Items.Add(new BarItem { Type = ItemType.Url, Label = "Bing: " + Loc.T("clipboard"), Url = "https://www.bing.com/search?q={clipboard}", Width = 330 });
+                Pages.Add(page);
+                added++;
+            }
+
+            if (Missing("Power"))
+            {
+                var page = new BarPage { Name = "Power" };
+                page.Items.Add(Back("Main"));
+                page.Items.Add(new BarItem { Type = ItemType.Battery, Label = "", Width = 260 });
+                page.Items.Add(new BarItem { Type = ItemType.Wifi, Label = "", Width = 200 });
+                page.Items.Add(new BarItem { Type = ItemType.Bluetooth, Label = "", Width = 230 });
+                page.Items.Add(new BarItem { Type = ItemType.Command, Label = Loc.T("Sleep"), Command = "rundll32.exe powrprof.dll,SetSuspendState 0,1,0", Width = 150 });
+                page.Items.Add(new BarItem { Type = ItemType.LockScreen, Label = Loc.T("Lock"), Width = 120 });
+                Pages.Add(page);
+                added++;
+            }
+
+            if (Missing("More"))
+            {
+                var page = new BarPage { Name = "More" };
+                page.Items.Add(Back("Main"));
+                page.Items.Add(GoTo("Calculator", "Calculator", 190));
+                page.Items.Add(GoTo("Clipboard", "Clipboard", 190));
+                page.Items.Add(GoTo("Search", "Search", 160));
+                page.Items.Add(GoTo("Power", "Power", 150));
                 Pages.Add(page);
                 added++;
             }

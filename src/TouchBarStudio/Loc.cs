@@ -224,6 +224,27 @@ namespace TouchBarStudio
             A(d, "Image (png, jpg, bmp, ico) or program file used as the icon. Optional; App items use the program's own icon.", "Картинка (png, jpg, bmp, ico) или программа для значка. Необязательно; программы используют собственный значок.", "Сүрөтчө катары колдонулган сүрөт (png, jpg, bmp, ico) же программа. Милдеттүү эмес; App өзүнүн сүрөтчөсүн колдонот.");
             A(d, "Colour of the filled part of sliders and of the timeline.", "Цвет заполненной части ползунков и таймлайна.", "Жылдырмалардын жана таймлайндын толгон бөлүгүнүн түсү.");
 
+            A(d, "Slot", "Ячейка", "Уяча");
+            A(d, "Which clipboard history entry the item shows: 0 is the newest (type Clipboard).", "Какую запись истории буфера показывает элемент: 0 — самая новая (тип Clipboard).", "Элемент буфер таржымалынын кайсы жазуусун көрсөтөт: 0 — эң жаңысы (Clipboard түрү).");
+            A(d, "Battery", "Батарея", "Батарея");
+            A(d, "No battery", "Нет батареи", "Батарея жок");
+            A(d, "Sleep", "Сон", "Уйку");
+            A(d, "More", "Ещё", "Дагы");
+            A(d, "Calculator", "Калькулятор", "Калькулятор");
+            A(d, "Clipboard", "Буфер", "Буфер");
+            A(d, "Search", "Поиск", "Издөө");
+            A(d, "Power", "Питание", "Кубат");
+            A(d, "selection", "выделенное", "тандалган");
+            A(d, "clipboard", "буфер", "буфер");
+            A(d, "Battery level", "Заряд батареи", "Батарея деңгээли");
+            A(d, "Clipboard entry", "Запись буфера", "Буфер жазуусу");
+            A(d, "Calculator key", "Клавиша калькулятора", "Калькулятор баскычы");
+            A(d, "Calculator display (tap to copy)", "Дисплей калькулятора (нажмите — копировать)", "Калькулятор дисплейи (көчүрүү үчүн басыңыз)");
+            A(d, "Search selection (Google)", "Поиск выделенного (Google)", "Тандалганды издөө (Google)");
+            A(d, "Search clipboard (Bing)", "Поиск из буфера (Bing)", "Буферден издөө (Bing)");
+            A(d, "Clear clipboard history", "Очистить историю буфера", "Буфер таржымалын тазалоо");
+            A(d, "Clipboard is empty", "Буфер пуст", "Буфер бош");
+
             return d;
         }
     }

@@ -109,10 +109,35 @@ namespace TouchBarStudio
             base.SetVisibleCore(value && _showAllowed);
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        static extern bool AddClipboardFormatListener(IntPtr hwnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
+
+        const int WM_CLIPBOARDUPDATE = 0x031D;
+
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
             Theme.StyleWindow(this);
+            try { AddClipboardFormatListener(Handle); } catch { }
+        }
+
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            try { RemoveClipboardFormatListener(Handle); } catch { }
+            base.OnHandleDestroyed(e);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg == WM_CLIPBOARDUPDATE && ClipboardHistory.Capture() && _page != null &&
+                _page.Items.Any(i => i.Type == ItemType.Clipboard))
+            {
+                RefreshBar();
+            }
         }
 
         protected override void OnVisibleChanged(EventArgs e)
@@ -474,6 +499,12 @@ namespace TouchBarStudio
             Add(Loc.T("Volume slider"), ItemType.Volume);
             Add(Loc.T("Media timeline (scrubber)"), ItemType.Scrubber);
             Add(Loc.T("Microphone mute"), ItemType.MicMute);
+            Add(Loc.T("Battery level"), ItemType.Battery);
+            Add(Loc.T("Clipboard entry"), ItemType.Clipboard);
+            Add(Loc.T("Calculator key"), ItemType.Calc);
+            Add(Loc.T("Calculator display (tap to copy)"), ItemType.CalcDisplay);
+            Add("Wi-Fi", ItemType.Wifi);
+            Add("Bluetooth", ItemType.Bluetooth);
 
             var quick = new ToolStripMenuItem(Loc.T("Quick actions"));
             Theme.StyleMenu(quick.DropDown);
@@ -488,6 +519,16 @@ namespace TouchBarStudio
             Quick("Screenshot", "win+shift+s");
             Quick("Task view", "win+tab");
             Quick("Show desktop", "win+d");
+            void QuickItem(string label, ItemType type, string url, int width) => quick.DropDownItems.Add(Loc.T(label), null, (s, e) =>
+            {
+                _page.Items.Add(new BarItem { Type = type, Label = Loc.T(label), Url = url, Width = width });
+                FillList(_page.Items.Count - 1);
+                _cfg.Save();
+                RefreshBar();
+            });
+            QuickItem("Search selection (Google)", ItemType.Url, "https://www.google.com/search?q={selection}", 330);
+            QuickItem("Search clipboard (Bing)", ItemType.Url, "https://www.bing.com/search?q={clipboard}", 330);
+            quick.DropDownItems.Add(Loc.T("Clear clipboard history"), null, (s, e) => { ClipboardHistory.Clear(); RefreshBar(); });
             quick.DropDownItems.Add(Loc.T("Notifications settings"), null, (s, e) =>
             {
                 _page.Items.Add(new BarItem { Type = ItemType.Url, Label = Loc.T("Notifications settings"), Url = "ms-settings:notifications", Width = 230 });
@@ -792,6 +833,12 @@ namespace TouchBarStudio
                 case ItemType.Volume: item.Label = ""; item.Width = 380; break;
                 case ItemType.Scrubber: item.Label = ""; item.Width = 1000; break;
                 case ItemType.MicMute: item.Label = Loc.T("Mic"); item.Width = 150; break;
+                case ItemType.Battery: item.Label = ""; item.Width = 260; break;
+                case ItemType.Clipboard: item.Label = ""; item.Width = 300; break;
+                case ItemType.Calc: item.Label = "7"; item.Width = 72; break;
+                case ItemType.CalcDisplay: item.Label = ""; item.Width = 300; break;
+                case ItemType.Wifi: item.Label = ""; item.Width = 200; break;
+                case ItemType.Bluetooth: item.Label = ""; item.Width = 230; break;
             }
 
             _page.Items.Add(item);
@@ -965,6 +1012,12 @@ namespace TouchBarStudio
                 case ItemType.Volume: return Loc.T("Volume slider");
                 case ItemType.Scrubber: return Loc.T("Media timeline (scrubber)");
                 case ItemType.MicMute: return Loc.T("Microphone mute");
+                case ItemType.Battery: return Loc.T("Battery level");
+                case ItemType.Clipboard: return Loc.T("Clipboard entry") + " " + item.Slot;
+                case ItemType.Calc: return Loc.T("Calculator key") + " " + item.Label;
+                case ItemType.CalcDisplay: return Loc.T("Calculator display (tap to copy)");
+                case ItemType.Wifi: return "Wi-Fi";
+                case ItemType.Bluetooth: return "Bluetooth";
                 default: return item.Type.ToString();
             }
         }
@@ -1089,6 +1142,16 @@ namespace TouchBarStudio
                 _ = SystemControls.RefreshBrightnessAsync();
             }
 
+            if (_tick % 10 == 0 && _page.Items.Any(i => i.Type == ItemType.Wifi || i.Type == ItemType.Bluetooth))
+            {
+                _ = RadioControl.RefreshAsync().ContinueWith(t => OnUi(RefreshBar));
+            }
+
+            if (_tick % 30 == 0 && _page.Items.Any(i => i.Type == ItemType.Battery))
+            {
+                redraw = true;
+            }
+
             var media = SystemState.Media;
             if (media != null && media.HasSession && media.Playing && _page.Items.Any(i => i.Type == ItemType.Scrubber) && _drag < 0)
             {
@@ -1133,6 +1196,7 @@ namespace TouchBarStudio
 
             SystemState.PollAudio();
             _ = SystemControls.RefreshBrightnessAsync();
+            _ = RadioControl.RefreshAsync();
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -1456,6 +1520,7 @@ namespace TouchBarStudio
                 _lastAction = Loc.F("Error: {0}", ex.Message);
             }
 
+            RefreshBar();
             UpdateStatus();
         }
 
