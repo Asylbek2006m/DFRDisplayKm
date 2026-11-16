@@ -63,7 +63,7 @@ namespace TouchBarStudio
             _graphics = Graphics.FromImage(_frame);
             _graphics.SmoothingMode = SmoothingMode.AntiAlias;
             _graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            _graphics.PixelOffsetMode = PixelOffsetMode.HalfPixel;
+            _graphics.PixelOffsetMode = PixelOffsetMode.Half;
             _graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
         }
 
