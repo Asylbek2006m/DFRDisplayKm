@@ -224,6 +224,7 @@ namespace TouchBarStudio
             A(d, "Image (png, jpg, bmp, ico) or program file used as the icon. Optional; App items use the program's own icon.", "Картинка (png, jpg, bmp, ico) или программа для значка. Необязательно; программы используют собственный значок.", "Сүрөтчө катары колдонулган сүрөт (png, jpg, bmp, ico) же программа. Милдеттүү эмес; App өзүнүн сүрөтчөсүн колдонот.");
             A(d, "Colour of the filled part of sliders and of the timeline.", "Цвет заполненной части ползунков и таймлайна.", "Жылдырмалардын жана таймлайндын толгон бөлүгүнүн түсү.");
 
+            A(d, "Show Edit page when typing, Media page when playing", "Показывать «Правка» при вводе текста и «Медиа» при воспроизведении", "Текст терип жатканда «Түзөтүү», ойноп жатканда «Медиа» барагын көрсөтүү");
             A(d, "Slot", "Ячейка", "Уяча");
             A(d, "Which clipboard history entry the item shows: 0 is the newest (type Clipboard).", "Какую запись истории буфера показывает элемент: 0 — самая новая (тип Clipboard).", "Элемент буфер таржымалынын кайсы жазуусун көрсөтөт: 0 — эң жаңысы (Clipboard түрү).");
             A(d, "Battery", "Батарея", "Батарея");

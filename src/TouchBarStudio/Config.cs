@@ -109,6 +109,7 @@ namespace TouchBarStudio
         public ThemeMode Theme { get; set; } = ThemeMode.Auto;
         public string Language { get; set; } = "auto";
         public bool AutoSwitchPages { get; set; } = true;
+        public bool AutoContextPages { get; set; } = true;
         public Color BarBackground { get; set; } = Color.Black;
 
         static readonly JsonSerializerOptions Options = new JsonSerializerOptions

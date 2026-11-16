@@ -598,6 +598,12 @@ namespace TouchBarStudio
                 _cfg.Save();
             })
             { Checked = _cfg.AutoSwitchPages });
+            menu.Items.Add(new ToolStripMenuItem(Loc.T("Show Edit page when typing, Media page when playing"), null, (s, e) =>
+            {
+                _cfg.AutoContextPages = !_cfg.AutoContextPages;
+                _cfg.Save();
+            })
+            { Checked = _cfg.AutoContextPages });
             menu.Items.Add(Loc.T("Add preset pages"), null, (s, e) =>
             {
                 if (_cfg.AddPresetPages() > 0)
@@ -1228,27 +1234,91 @@ namespace TouchBarStudio
         /// Context presets: shows the page whose program list contains the active window's program,
         /// and returns to the previous page when no page matches. TouchBarStudio itself is ignored.
         /// </summary>
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct GuiThreadInfo
+        {
+            public int cbSize;
+            public int flags;
+            public IntPtr hwndActive;
+            public IntPtr hwndFocus;
+            public IntPtr hwndCapture;
+            public IntPtr hwndMenuOwner;
+            public IntPtr hwndMoveSize;
+            public IntPtr hwndCaret;
+            public int left, top, right, bottom;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool GetGUIThreadInfo(uint threadId, ref GuiThreadInfo info);
+
+        /// <summary>True when the active window has a text caret (typing in Notepad, Word, most native editors).</summary>
+        static bool IsTyping()
+        {
+            try
+            {
+                var hwnd = GetForegroundWindow();
+                if (hwnd == IntPtr.Zero) return false;
+                uint thread = GetWindowThreadProcessId(hwnd, out _);
+                var info = new GuiThreadInfo { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
+                return GetGUIThreadInfo(thread, ref info) && info.hwndCaret != IntPtr.Zero;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        string _lastContext = "";
+
+        /// <summary>
+        /// Context presets, like macOS: a page is chosen from (1) the active program, (2) typing in a text field
+        /// (page named Edit), (3) media playing (page named Media). The page only changes when the context changes,
+        /// so tapping another page by hand is not undone. When the context disappears the previous page returns.
+        /// TouchBarStudio itself is ignored.
+        /// </summary>
         void AutoSwitchPage()
         {
             string name = ForegroundProcessName();
-            if (name.Length == 0 || name == _lastForeground) return;
-            _lastForeground = name;
+            if (name.Length == 0) return;
 
             if (string.Equals(name, System.IO.Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? ""), StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            var match = _cfg.Pages.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Processes) &&
+            BarPage Named(string n) => _cfg.Pages.FirstOrDefault(p => string.Equals(p.Name, n, StringComparison.OrdinalIgnoreCase));
+
+            var target = _cfg.Pages.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Processes) &&
                 p.Processes.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
                     .Any(x => string.Equals(x.Trim().Replace(".exe", ""), name, StringComparison.OrdinalIgnoreCase)));
+            string context = target != null ? "app:" + target.Name : "";
 
-            if (match != null)
+            if (target == null && _cfg.AutoContextPages)
             {
-                if (match != _page)
+                var edit = Named("Edit");
+                var mediaPage = Named("Media");
+                var media = SystemState.Media;
+                if (edit != null && IsTyping())
+                {
+                    target = edit;
+                    context = "typing";
+                }
+                else if (mediaPage != null && media != null && media.HasSession && media.Playing)
+                {
+                    target = mediaPage;
+                    context = "media";
+                }
+            }
+
+            if (context == _lastContext) return;
+            _lastContext = context;
+
+            if (target != null)
+            {
+                if (target != _page)
                 {
                     if (_homePage == null) _homePage = _page;
-                    SelectPage(match);
+                    SelectPage(target);
                 }
             }
             else if (_homePage != null)
