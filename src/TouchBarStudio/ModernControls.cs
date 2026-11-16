@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -24,6 +25,7 @@ namespace TouchBarStudio
             Width = Theme.S(96);
         }
 
+        [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool Accent
         {
             get => _accent;
@@ -122,6 +124,7 @@ namespace TouchBarStudio
     /// <summary>Shows the rendered bar scaled to fit. Maps mouse positions back to bar pixels.</summary>
     public class PreviewSurface : Control
     {
+        [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Bitmap Frame { get; set; }
 
         public PreviewSurface()
